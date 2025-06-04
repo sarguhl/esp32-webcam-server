@@ -2,7 +2,7 @@
 esp32 webcam server with flask frontend
 
 ## Setup Instructions
-1. Instal all necessary Python and Arudino Libraries.
+1. Instal all necessary Python and Arduino Libraries.
 2. Setup Arduino board with correct COM Port in the Arduino IDE
 3. Compile and upload the WebcamServer.ino file to the ESP32 Board
 4. Navigate to the webUI folder
