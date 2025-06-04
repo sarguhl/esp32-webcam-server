@@ -18,14 +18,14 @@ esp32 webcam server with flask frontend
 
 `/webUI/`
 - Contains the Flask webserver and User Interface as well as static files and stored images.
-`/webUI/static/`
-- Contains static files such as icons and saved images.
-`/webUI/static/gallery/`
-- Stores the captured images from the doorbell.
-`/webUI/templates/`
-- Hosts HTML templates used for the frontend.
-`/webUI/templates/base.html`
-- Layout for all pages
+- `/webUI/static/`
+Contains static files such as icons and saved images.
+- `/webUI/static/gallery/`
+Stores the captured images from the doorbell.
+- `/webUI/templates/`
+Hosts HTML templates used for the frontend.
+- `/webUI/templates/base.html`
+Layout for all pages
 The rest of the template pages are self explainatory
 
 `/webUI/script.py/`
