@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ESP32-CAM Dashboard{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #121212;
+            color: #f8f9fa;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar {
+            background-color: #1e1e1e;
+            border-bottom: 1px solid #2d2d2d;
+        }
+        .nav-link {
+            color: #adb5bd;
+            margin: 0 10px;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .nav-link:hover, .nav-link.active {
+            background-color: #2d2d2d;
+            color: #ffffff;
+        }
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            flex: 1;
+        }
+        .stream-container {
+            position: relative;
+            margin-bottom: 20px;
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .stream-img {
+            width: 100%;
+            display: block;
+        }
+        .stats-panel {
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .stat-card {
+            background-color: #2d2d2d;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-label {
+            color: #adb5bd;
+            font-size: 14px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-connected {
+            background-color: #28a745;
+        }
+        .status-disconnected {
+            background-color: #dc3545;
+        }
+        h1 {
+            margin: 0;
+            color: #fff;
+        }
+        .connection-status {
+            font-size: 14px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background-color: #2d2d2d;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .gallery-item {
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.3s;
+            position: relative;
+        }
+        .gallery-item:hover {
+            transform: scale(1.03);
+        }
+        .gallery-img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+        }
+        .gallery-info {
+            padding: 10px;
+        }
+        .doorbell-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+        .doorbell-button {
+            background-color: #007bff;
+            color: white;
+            width: 150px;
+            height: 150px;
+            border-radius: 75px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            cursor: pointer;
+            margin: 50px 0;
+            border: none;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+        }
+        .doorbell-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            background-color: #0069d9;
+        }
+        .doorbell-button:active {
+            transform: scale(0.95);
+        }
+        .doorbell-button:disabled {
+            background-color: #6c757d;
+            transform: none;
+            opacity: 0.7;
+        }
+        .doorbell-status {
+            font-size: 1.5rem;
+            margin: 20px 0;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .show {
+            opacity: 1;
+        }
+        footer {
+            background-color: #1e1e1e;
+            text-align: center;
+            padding: 15px;
+            color: #adb5bd;
+            margin-top: 20px;
+        }
+        /* New styles for image selection and deletion */
+        .image-checkbox {
+            transform: scale(1.5);
+            cursor: pointer;
+        }
+        .form-check-input:checked {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        .delete-btn {
+            border-color: rgba(220, 53, 69, 0.5);
+            color: rgba(220, 53, 69, 0.8);
+        }
+        .delete-btn:hover {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand text-white" href="/">ESP32-CAM</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'stream' %}active{% endif %}" href="/stream">
+                            <i class="bi bi-camera-video"></i> Live Stream
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'gallery' %}active{% endif %}" href="/gallery">
+                            <i class="bi bi-images"></i> Image Gallery
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'doorbell' %}active{% endif %}" href="/doorbell">
+                            <i class="bi bi-bell"></i> Doorbell
+                        </a>
+                    </li>
+                </ul>
+                <div class="ms-auto">
+                    <div class="connection-status">
+                        <span class="status-indicator" id="status-indicator"></span>
+                        <span id="connection-text">Checking connection...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="dashboard">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p class="mb-0">ESP32-CAM Dashboard &copy; 2025</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Update connection status every second
+        setInterval(function() {
+            fetch('/stats')
+                .then(response => response.json())
+                .then(data => {
+                    // Update connection status
+                    const statusIndicator = document.getElementById('status-indicator');
+                    const connectionText = document.getElementById('connection-text');
+                    
+                    if (data.connection_status === 'Connected') {
+                        statusIndicator.className = 'status-indicator status-connected';
+                        connectionText.textContent = 'Connected';
+                    } else {
+                        statusIndicator.className = 'status-indicator status-disconnected';
+                        connectionText.textContent = data.connection_status;
+                    }
+                })
+                .catch(error => console.error('Error fetching stats:', error));
+        }, 1000);
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

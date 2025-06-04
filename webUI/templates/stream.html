@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}ESP32-CAM Stream{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Live Stream</h1>
+    <button id="captureBtn" class="btn btn-primary">
+        <i class="bi bi-camera"></i> Capture Image
+    </button>
+</div>
+
+<div class="stream-container">
+    <img src="{{ url_for('video_feed') }}" class="stream-img" alt="ESP32-CAM Stream">
+</div>
+
+<div class="stats-panel">
+    <h3 class="mb-3">System Statistics</h3>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">FPS</div>
+            <div class="stat-value" id="fps">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Resolution</div>
+            <div class="stat-value" id="resolution">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">CPU Usage</div>
+            <div class="stat-value" id="cpu">0%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Memory Usage</div>
+            <div class="stat-value" id="memory">0%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Current Time</div>
+            <div class="stat-value" id="time">00:00:00</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Saved Images</div>
+            <div class="stat-value" id="gallery-count">0</div>
+        </div>
+    </div>
+</div>
+
+<!-- Capture Success Alert -->
+<div class="alert alert-success alert-dismissible fade" id="captureAlert" role="alert">
+    <strong>Success!</strong> Image captured and saved to gallery.
+    <a href="#" id="viewCapturedImage" class="alert-link">View image</a>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Update statistics every second
+    setInterval(function() {
+        fetch('/stats')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('fps').textContent = data.fps;
+                document.getElementById('resolution').textContent = data.resolution;
+                document.getElementById('cpu').textContent = data.cpu_percent + '%';
+                document.getElementById('memory').textContent = data.memory_percent + '%';
+                document.getElementById('time').textContent = data.current_time.split(' ')[1];
+                document.getElementById('gallery-count').textContent = data.gallery_count;
+            })
+            .catch(error => console.error('Error fetching stats:', error));
+    }, 1000);
+
+    // Türklingen Button
+    document.getElementById('captureBtn').addEventListener('click', function() {
+        fetch('/capture', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const alert = document.getElementById('captureAlert');
+                alert.classList.add('show');
+                
+                // Set the view link
+                document.getElementById('viewCapturedImage').href = `/static/gallery/${data.filename}`;
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    alert.classList.remove('show');
+                }, 5000);
+            } else {
+                console.error('Failed to capture image:', data.message);
+            }
+        })
+        .catch(error => console.error('Error capturing image:', error));
+    });
+</script>
+{% endblock %}

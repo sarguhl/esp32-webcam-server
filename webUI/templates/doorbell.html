@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}ESP32-CAM Doorbell{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Smart Doorbell</h1>
+    <a href="/gallery" class="btn btn-primary">
+        <i class="bi bi-images"></i> View Gallery
+    </a>
+</div>
+
+<div class="stats-panel">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="doorbell-container py-4">
+                <h3 class="mb-4">Ring the Doorbell</h3>
+                
+                <!-- <div id="latestImageContainer" class="d-none mb-4 text-center">
+                    <h4 class="mb-3">Latest Capture</h4>
+                    <img id="latestImage" src="" class="img-fluid rounded" style="max-height: 300px;" alt="Latest captured image">
+                </div> -->
+                
+                <button id="doorbellBtn" class="doorbell-button">
+                    <i class="bi bi-bell-fill"></i>
+                </button>
+                <div id="doorbellStatus" class="doorbell-status">
+                    Capturing image...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Capture Success Modal -->
+<div class="modal fade" id="captureModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">Doorbell Event Captured</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="capturedImage" src="" class="img-fluid mb-3" alt="Captured image">
+                <p id="captureMessage" class="mb-0">Image saved to gallery with timestamp</p>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a id="viewGalleryBtn" href="/gallery" class="btn btn-primary">View Gallery</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Modal -->
+<div class="modal fade" id="errorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-danger">Connection Error</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size: 3rem;"></i>
+                </div>
+                <p>Unable to connect to the ESP32-CAM. Please check the connection and try again.</p>
+                <p class="text-muted mb-0">Make sure your computer is connected to the ESP32-CAM WiFi network.</p>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="/stream" class="btn btn-primary">Go to Stream Page</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Check connection status on page load
+    let connectionStatusOk = false;
+    let lastCapturedImageUrl = null;
+    
+    // Check connection and get the latest image if available
+    function checkConnectionAndImage() {
+    fetch('/stats')
+        .then(response => response.json())
+        .then(data => {
+            connectionStatusOk = data.connection_status === 'Connected';
+            
+            // Get the latest image if available
+            if (data.gallery_count > 0) {
+                fetch('/latest_image')
+                    .then(response => response.json())
+                    .then(imageData => {
+                        if (imageData.success && imageData.filename) {
+                            const imageUrl = `/static/gallery/${imageData.filename}`;
+                            lastCapturedImageUrl = imageUrl;
+                            
+                            // Display the latest image (with null checks)
+                            const latestImageEl = document.getElementById('latestImage');
+                            const latestImageContainerEl = document.getElementById('latestImageContainer');
+                            
+                            if (latestImageEl) {
+                                latestImageEl.src = imageUrl;
+                            }
+                            
+                            if (latestImageContainerEl) {
+                                latestImageContainerEl.classList.remove('d-none');
+                            }
+                        }
+                    })
+                    .catch(error => console.error('Error getting latest image:', error));
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching stats:', error);
+            connectionStatusOk = false;
+        });
+    }
+    
+    // Check connection on page load
+    checkConnectionAndImage();
+    
+    // Set interval to check connection status
+    setInterval(checkConnectionAndImage, 5000);
+    
+    // Ring doorbell button
+    document.getElementById('doorbellBtn').addEventListener('click', function() {
+        const button = this;
+        const statusText = document.getElementById('doorbellStatus');
+        
+        // First check if we're connected
+        if (!connectionStatusOk) {
+            // Show error modal
+            const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+            errorModal.show();
+            return;
+        }
+        
+        // Disable button and show status
+        button.disabled = true;
+        statusText.textContent = 'Ringing doorbell and capturing image...';
+        statusText.classList.add('show');
+        
+        // Simulate doorbell sound
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5
+        
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.1);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.5);
+        
+        // Capture image
+        fetch('/capture', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data)
+            if (data.success) {
+                // Update status
+                statusText.textContent = 'Image captured successfully!';
+                
+                // Show captured image in modal
+                const imageUrl = `/static/gallery/${data.filename}`;
+                lastCapturedImageUrl = imageUrl;
+                
+                // Update latest image display (with null checks)
+                const latestImageEl = document.getElementById('latestImage');
+                const latestImageContainerEl = document.getElementById('latestImageContainer');
+                
+                if (latestImageEl) {
+                    latestImageEl.src = imageUrl;
+                }
+                
+                if (latestImageContainerEl) {
+                    latestImageContainerEl.classList.remove('d-none');
+                }
+                
+                // Update modal image
+                document.getElementById('capturedImage').src = imageUrl;
+                document.getElementById('captureMessage').className = 'mb-0 text-success';
+                document.getElementById('captureMessage').textContent = 'Image saved to gallery with timestamp';
+                
+                // Show modal
+                const captureModal = new bootstrap.Modal(document.getElementById('captureModal'));
+                captureModal.show();
+                
+                // Re-enable button and hide status after a delay
+                setTimeout(() => {
+                    button.disabled = false;
+                    statusText.classList.remove('show');
+                }, 3000);
+            } else {
+                // Update status for error
+                statusText.textContent = 'Failed to capture image';
+                
+                // Show error in modal
+                document.getElementById('capturedImage').src = lastCapturedImageUrl || '';
+                document.getElementById('captureMessage').className = 'mb-0 text-danger';
+                document.getElementById('captureMessage').textContent = 'Failed to capture a new image. Connection to camera may be lost.';
+                
+                if (lastCapturedImageUrl) {
+                    const captureModal = new bootstrap.Modal(document.getElementById('captureModal'));
+                    captureModal.show();
+                } else {
+                    const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+                    errorModal.show();
+                }
+                
+                setTimeout(() => {
+                    button.disabled = false;
+                    statusText.classList.remove('show');
+                }, 3000);
+            }
+        })
+        .catch(error => {
+            console.error('Error capturing image:', error);
+            statusText.textContent = 'Error capturing image';
+            
+            // Show error modal
+            const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+            errorModal.show();
+            
+            button.disabled = false;
+            setTimeout(() => {
+                statusText.classList.remove('show');
+            }, 3000);
+        });
+    });
+</script>
+{% endblock %}

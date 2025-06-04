@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}ESP32-CAM Gallery{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Image Gallery</h1>
+    <div>
+        <a href="/stream" class="btn btn-primary me-2">
+            <i class="bi bi-camera"></i> Capture New Image
+        </a>
+        <button id="deleteSelectedBtn" class="btn btn-danger" disabled>
+            <i class="bi bi-trash"></i> Delete Selected
+        </button>
+    </div>
+</div>
+
+<div class="stats-panel mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">Image Gallery</h3>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="selectAllImages">
+            <label class="form-check-label" for="selectAllImages">Select All</label>
+        </div>
+    </div>
+    
+    <style>
+        /* Override the gallery grid to ensure at least 3 images per row */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* Force 3 columns minimum */
+            gap: 20px;
+        }
+        
+        /* Responsive adjustments for larger screens */
+        @media (min-width: 992px) {
+            .gallery-grid {
+                grid-template-columns: repeat(4, 1fr); /* 4 images per row on larger screens */
+            }
+        }
+        
+        @media (min-width: 1200px) {
+            .gallery-grid {
+                grid-template-columns: repeat(5, 1fr); /* 5 images per row on extra large screens */
+            }
+        }
+        
+        /* Make sure images don't get too small on mobile */
+        @media (max-width: 768px) {
+            .gallery-grid {
+                grid-template-columns: repeat(2, 1fr); /* 2 images per row on mobile */
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .gallery-grid {
+                grid-template-columns: repeat(1, 1fr); /* 1 image per row on very small screens */
+            }
+        }
+    </style>
+    
+    {% if images %}
+        <div class="gallery-grid">
+            {% for image in images %}
+                <div class="gallery-item">
+                    <div class="position-relative">
+                        <div class="form-check position-absolute top-0 end-0 m-2">
+                            <input class="form-check-input image-checkbox" type="checkbox" value="{{ image }}" id="check-{{ image }}">
+                        </div>
+                        <a href="{{ url_for('static', filename='gallery/' + image) }}" class="gallery-link" data-image="{{ image }}">
+                            <img src="{{ url_for('static', filename='gallery/' + image) }}" class="gallery-img" alt="Captured image">
+                        </a>
+                    </div>
+                    <div class="gallery-info">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="text-white">
+                                {# Convert filename format YYYYMMDD_HHMMSS.jpg to readable format #}
+                                {% set date_str = image.split('.')[0] %}
+                                {% set date_parts = date_str.split('_') %}
+                                {% set date = date_parts[0][:4] + '-' + date_parts[0][4:6] + '-' + date_parts[0][6:] %}
+                                {% set time = date_parts[1][:2] + ':' + date_parts[1][2:4] + ':' + date_parts[1][4:] %}
+                                <div class="mb-1">{{ date }}</div>
+                                <div>{{ time }}</div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger delete-btn" data-image="{{ image }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="bi bi-camera-fill" style="font-size: 4rem; opacity: 0.5;"></i>
+            </div>
+            <h4>No images yet</h4>
+            <p class="text-muted">Capture images from the live stream or doorbell page</p>
+            <a href="/stream" class="btn btn-primary mt-3">
+                <i class="bi bi-camera"></i> Go to Live Stream
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Image Modal -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="imageModalTitle">Image View</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-0">
+                <img id="modalImage" src="" class="img-fluid" alt="Captured image">
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" id="modalDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteConfirmMessage">Are you sure you want to delete the selected image(s)?</p>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Modal for image viewing
+    const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
+    const deleteConfirmModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    let currentImageToDelete = null;
+    let imagesToDelete = [];
+    
+    // Image viewing functionality
+    document.querySelectorAll('.gallery-link').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const imgUrl = this.getAttribute('href');
+            const imgName = this.dataset.image;
+            
+            document.getElementById('modalImage').src = imgUrl;
+            document.getElementById('imageModalTitle').textContent = imgName;
+            document.getElementById('modalDeleteBtn').dataset.image = imgName;
+            
+            imageModal.show();
+        });
+    });
+    
+    // Delete single image from modal
+    document.getElementById('modalDeleteBtn').addEventListener('click', function() {
+        const imageName = this.dataset.image;
+        currentImageToDelete = imageName;
+        document.getElementById('deleteConfirmMessage').textContent = `Are you sure you want to delete ${imageName}?`;
+        imageModal.hide();
+        deleteConfirmModal.show();
+    });
+    
+    // Delete single image buttons
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const imageName = this.dataset.image;
+            currentImageToDelete = imageName;
+            imagesToDelete = [imageName];
+            document.getElementById('deleteConfirmMessage').textContent = `Are you sure you want to delete ${imageName}?`;
+            deleteConfirmModal.show();
+        });
+    });
+    
+    // Checkbox selection functionality
+    const selectAllCheckbox = document.getElementById('selectAllImages');
+    const imageCheckboxes = document.querySelectorAll('.image-checkbox');
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+    
+    // Update delete button state based on selections
+    function updateDeleteButtonState() {
+        const selectedCount = document.querySelectorAll('.image-checkbox:checked').length;
+        deleteSelectedBtn.disabled = selectedCount === 0;
+        if (selectedCount > 0) {
+            deleteSelectedBtn.innerHTML = `<i class="bi bi-trash"></i> Delete Selected (${selectedCount})`;
+        } else {
+            deleteSelectedBtn.innerHTML = `<i class="bi bi-trash"></i> Delete Selected`;
+        }
+    }
+    
+    // Select all functionality
+    selectAllCheckbox.addEventListener('change', function() {
+        const isChecked = this.checked;
+        imageCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        updateDeleteButtonState();
+    });
+    
+    // Individual checkbox change
+    imageCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateDeleteButtonState();
+            
+            // Update "select all" checkbox state
+            const allChecked = document.querySelectorAll('.image-checkbox:checked').length === imageCheckboxes.length;
+            selectAllCheckbox.checked = allChecked;
+            selectAllCheckbox.indeterminate = !allChecked && document.querySelectorAll('.image-checkbox:checked').length > 0;
+        });
+    });
+    
+    // Delete selected button
+    deleteSelectedBtn.addEventListener('click', function() {
+        const selectedImages = Array.from(document.querySelectorAll('.image-checkbox:checked')).map(cb => cb.value);
+        if (selectedImages.length > 0) {
+            imagesToDelete = selectedImages;
+            document.getElementById('deleteConfirmMessage').textContent = 
+                `Are you sure you want to delete ${selectedImages.length} selected image${selectedImages.length > 1 ? 's' : ''}?`;
+            deleteConfirmModal.show();
+        }
+    });
+    
+    // Confirm delete button
+    document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+        // Send delete request to server
+        fetch('/delete_images', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                images: imagesToDelete
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload the page to show updated gallery
+                window.location.reload();
+            } else {
+                alert('Error deleting image(s): ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting image(s)');
+        });
+        
+        deleteConfirmModal.hide();
+    });
+    
+    // Initialize delete button state
+    updateDeleteButtonState();
+</script>
+{% endblock %}
