@@ -14,12 +14,12 @@ import base64
 
 app = Flask(__name__)
 
-# ESP32-CAM IP address (default for ESP32 access points)
+# ESP32-CAM IP address / access points
 ESP32_IP = "192.168.4.1"
 STREAM_URL = f"http://{ESP32_IP}:81/stream"
 CAPTURE_URL = f"http://{ESP32_IP}:80/capture"
 
-# Discord webhook URL - replace with your actual webhook URL
+# Notification Webhook URL
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1379740048760639530/oDc9nTxQEU5XqDFOTR1BTB8lHifTkHcVJHqqReImGFfsWiKIvnRTntAiNKC2caVy_RBW"
 
 # Folder to store captured images
@@ -34,7 +34,7 @@ connection_status = "Disconnected"
 last_frame = None
 frame_lock = threading.Lock()
 
-# Connection management
+# Connection management vars
 max_retries = 3
 retry_delay = 2
 connection_timeout = 5
@@ -44,7 +44,7 @@ def send_discord_notification(image_path, filename, trigger_type="manual"):
     Send a Discord notification with the captured image
     """
     try:
-        # Skip if webhook URL is not configured
+        # Skip if webhook not configured
         if not DISCORD_WEBHOOK_URL or "YOUR_WEBHOOK" in DISCORD_WEBHOOK_URL:
             print("Discord webhook not configured, skipping notification")
             return False
@@ -76,7 +76,7 @@ def send_discord_notification(image_path, filename, trigger_type="manual"):
             }
         }
         
-        # Prepare the webhook payload
+        # Prepare payload
         webhook_data = {
             "embeds": [embed]
         }
@@ -90,7 +90,7 @@ def send_discord_notification(image_path, filename, trigger_type="manual"):
                 'payload_json': json.dumps(webhook_data)
             }
             
-            # Send the webhook
+            # Send
             response = requests.post(
                 DISCORD_WEBHOOK_URL,
                 data=data,
@@ -449,7 +449,7 @@ def video_feed():
 
 @app.route('/capture', methods=['POST', 'GET'])  # Added GET method for compatibility
 def capture():
-    """API endpoint to capture an image - supports both POST and GET"""
+    """API endpoint to capture an image"""
     # Handle both JSON and form data
     trigger_type = "manual"
     
@@ -500,79 +500,6 @@ def stats():
         stats_data['resolution'] = "Unknown"
     
     return jsonify(stats_data)
-
-@app.route('/config/discord', methods=['GET', 'POST'])
-def discord_config():
-    """Configure Discord webhook settings"""
-    global DISCORD_WEBHOOK_URL
-    
-    if request.method == 'GET':
-        return jsonify({
-            'webhook_configured': bool(DISCORD_WEBHOOK_URL and "YOUR_WEBHOOK" not in DISCORD_WEBHOOK_URL),
-            'webhook_url': DISCORD_WEBHOOK_URL if DISCORD_WEBHOOK_URL and "YOUR_WEBHOOK" not in DISCORD_WEBHOOK_URL else ""
-        })
-    
-    elif request.method == 'POST':
-        data = request.get_json()
-        new_webhook_url = data.get('webhook_url', '').strip()
-        
-        if new_webhook_url:
-            # Basic validation for Discord webhook URL
-            if 'discord.com/api/webhooks/' in new_webhook_url:
-                DISCORD_WEBHOOK_URL = new_webhook_url
-                return jsonify({'success': True, 'message': 'Discord webhook URL updated successfully'})
-            else:
-                return jsonify({'success': False, 'message': 'Invalid Discord webhook URL format'})
-        else:
-            DISCORD_WEBHOOK_URL = ""
-            return jsonify({'success': True, 'message': 'Discord webhook disabled'})
-
-@app.route('/test_discord', methods=['POST'])
-def test_discord():
-    """Test Discord webhook with a sample message"""
-    try:
-        if not DISCORD_WEBHOOK_URL or "YOUR_WEBHOOK" in DISCORD_WEBHOOK_URL:
-            return jsonify({'success': False, 'message': 'Discord webhook not configured'})
-        
-        # Send a test message
-        test_embed = {
-            "title": "🧪 ESP32-CAM Test",
-            "description": "This is a test message from your ESP32-CAM system",
-            "color": 0xff9900,
-            "fields": [
-                {
-                    "name": "📅 Test Time", 
-                    "value": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
-                    "inline": True
-                },
-                {
-                    "name": "✅ Status", 
-                    "value": "Webhook is working correctly", 
-                    "inline": True
-                }
-            ],
-            "footer": {
-                "text": "ESP32-CAM Security System - Test Message"
-            }
-        }
-        
-        webhook_data = {
-            "embeds": [test_embed]
-        }
-        
-        response = requests.post(
-            DISCORD_WEBHOOK_URL,
-            json=webhook_data,
-            timeout=10
-        )
-        
-        if response.status_code == 204:
-            return jsonify({'success': True, 'message': 'Test message sent successfully to Discord'})
-        else:
-            return jsonify({'success': False, 'message': f'Discord webhook test failed: {response.status_code}'})
-            
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Error testing Discord webhook: {str(e)}'})
 
 @app.route('/favicon.ico')
 def favicon():
