@@ -1,4 +1,4 @@
-from flask import Flask, json, render_template, Response, jsonify, request, redirect, url_for, send_from_directory
+from flask import Flask, json, render_template, Response, jsonify, request, send_from_directory
 import cv2
 import time
 import threading
@@ -10,7 +10,6 @@ from urllib.request import urlopen
 import io
 import os
 from PIL import Image
-import base64
 
 app = Flask(__name__)
 
